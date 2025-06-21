@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model User {
+  id              String   @id @default(uuid())
+  phone_number    String   
+  email           String   @unique
+  username        String   @unique
+  firstName       String
+  lastName        String
+  region          String   @default("GLOBAL")
+  avatar          String?
+  role            Role     @default(USER)
+  is_email_verified      Boolean  @default(false)
+  is_phone_verified      Boolean  @default(true)
+
+  channelBanner String?
+  channelDescription String?
+  isBlocked Boolean @default(false)
+  blockedUntil DateTime?
+  subscribersCount Int @default(0)
+  totalViews BigInt @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  videos          Video[]
+  comments        Comment[]
+  likes           Like[]
+  subscriptions   Subscription[] @relation("UserSubscriptions")
+  subscribers     Subscription[] @relation("UserSubscribers")
+  playlists       Playlist[]
+  watchHistory WatchHistory[]
+
+  @@map("users")
+}
+
+// KEYINROQ QO'SHISH MUMKIN BO'LGAN QISMLAR:
+// - loginAttempts Int @default(0)
+// - notifications Notification[]
+
+model Video {
+  id              String      @id @default(uuid())
+  title           String
+  description     String?
+  thumbnail       String?
+  videoUrl        String
+  duration        Int         
+  status          VideoStatus @default(PROCESSING)
+  visibility      Visibility  @default(PUBLIC)
+  viewsCount      BigInt      @default(0)
+  likesCount      Int         @default(0)
+  dislikesCount   Int         @default(0)
+  createdAt       DateTime    @default(now())
+  category        String
+
+
+  commentsCount Int @default(0)
+  // Relations
+  authorId        String
+  author          User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments        Comment[]
+  likes           Like[]
+  playlist   PlaylistVideo[]
+  watchHistory WatchHistory[]
+  @@map("videos")
+}
+
+// KEYINROQ QO'SHISH MUMKIN:
+// - fileSize BigInt
+// - resolution String // 1080p, 720p, etc.
+// - category String?
+// - tags String[]
+// - publishedAt DateTime?
+
+model Comment {
+  id            String   @id @default(uuid())
+  content       String
+  likesCount    Int      @default(0)
+  isPinned Boolean @default(false)
+  updatedAt DateTime @updatedAt
+  parentId String?
+  parent Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[] @relation("CommentReplies")
+  createdAt     DateTime @default(now())
+
+  authorId      String
+  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  videoId       String
+  video         Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  likes         Like[]
+  dislikesCount Int @default(0)
+  @@map("comments")
+}
+
+
+model Subscription {
+  id            String   @id @default(cuid())
+  subscriberId  String
+  subscriber    User     @relation("UserSubscriptions", fields: [subscriberId], references: [id], onDelete: Cascade)
+  channelId     String
+  channel       User     @relation("UserSubscribers", fields: [channelId], references: [id], onDelete: Cascade)
+  notificationsEnabled Boolean @default(true)
+  createdAt     DateTime @default(now())
+
+  @@unique([subscriberId, channelId])
+  @@map("subscriptions")
+}
+
+model Playlist {
+  id            String   @id @default(uuid())
+  title         String
+  description   String?
+  visibility    Visibility @default(PUBLIC)
+  createdAt     DateTime @default(now())
+
+  authorId      String
+  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  videos        PlaylistVideo[]
+  @@map("playlists")
+}
+
+model PlaylistVideo {
+  id          String   @id @default(cuid())
+  position    Int
+  addedAt     DateTime @default(now())
+
+  playlistId  String
+  playlist    Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  videoId     String
+  video       Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, videoId])
+  @@map("playlist_videos")
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  type      LikeType
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId   String?
+  video     Video?   @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  commentId String?
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId, type])
+  @@unique([userId, commentId, type])
+  @@map("likes")
+}
+
+enum LikeType {
+  LIKE
+  DISLIKE
+}
+
+// KEYINROQ QO'SHISH MUMKIN BO'LGAN MODELLAR:
+
+model WatchHistory {
+  id          String   @id @default(cuid())
+  watchedAt   DateTime @default(now())
+  watchTime   Int   
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId     String
+  video       Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId])
+  @@map("watch_histories")
+}
+
+/*
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum NotificationType {
+  NEW_VIDEO
+  NEW_SUBSCRIBER
+  VIDEO_LIKED
+  COMMENT_REPLY
+  MENTION
+}
+*/
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  USER
+}
+
+enum VideoStatus {
+  UPLOADING
+  PROCESSING
+  PUBLISHED
+  PRIVATE
+  UNLISTED
+  DELETED
+  REJECTED
+}
+
+enum Visibility {
+  PUBLIC
+  UNLISTED
+  PRIVATE
+}
